@@ -1,181 +1,492 @@
-<!DOCTYPE html>
+﻿<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>屏幕测量工具 - 直尺 & 矩形测量</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#102a43" />
+    <title>真实屏幕尺子 | 显示器厘米测量</title>
+    <link rel="stylesheet" href="styles.css" />
+    <!-- ===== 浮动直尺样式 ===== -->
+    <style>
+      .flr-wrap {
+        position: fixed; z-index: 9999;
+        filter: drop-shadow(0 4px 18px rgba(0,0,0,0.2));
+        transition: filter 0.1s;
+      }
+      .flr-wrap.dragging { filter: drop-shadow(0 8px 30px rgba(0,0,0,0.32)); }
+      .flr-body {
+        display: flex; align-items: stretch; cursor: grab;
+        background: rgba(255,248,225,0.93); border: 2px solid #b98d42;
+        border-radius: 6px; min-width: 100px; min-height: 52px;
+        height: 52px; overflow: hidden;
+        transform-origin: 30px 50%;
+        transition: transform 0.12s ease;
+      }
+      .flr-body:active { cursor: grabbing; }
+      .flr-zero {
+        flex: 0 0 30px; display: flex; align-items: flex-end;
+        justify-content: center; padding-bottom: 3px;
+        border-right: 2px solid #b98d42;
+        background: rgba(185,141,66,0.12); color: #5c3f0d;
+        font-size: 11px; font-weight: 800; min-width: 30px;
+      }
+      .flr-track { flex: 1; position: relative; overflow: hidden; min-width: 30px; }
+      .flr-ticks { position: absolute; inset: 0; }
+      .flr-tick { position: absolute; top: 0; width: 1px; height: 14px; background: #8b6914; }
+      .flr-tick.t5 { height: 22px; width: 1px; background: #5c3f0d; }
+      .flr-tick.t10 { height: 30px; width: 2px; background: #5c3f0d; }
+      .flr-tick .flr-lbl {
+        position: absolute; top: 32px; left: 0; transform: translateX(-50%);
+        color: #5c3f0d; font-size: 10px; font-weight: 800; white-space: nowrap;
+      }
+      .flr-handle {
+        flex: 0 0 14px; background: #d4952b; border-radius: 0 4px 4px 0;
+        cursor: ew-resize; display: flex; align-items: center;
+        justify-content: center; min-width: 14px; transition: background 0.15s;
+      }
+      .flr-handle:hover { background: #c7871e; }
+      .flr-handle::after { content: ""; width: 2px; height: 18px; border-radius: 1px; background: rgba(255,255,255,0.7); }
+      .flr-bar {
+        display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+        padding: 5px 8px; margin-top: 4px;
+        background: #fffef9; border: 1px solid #e0d5b8;
+        border-radius: 6px; font-size: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08); white-space: nowrap;
+      }
+      .flr-bar label { color: #5c4a2e; font-size: 11px; }
+      .flr-bar input[type="range"] { width: 56px; accent-color: #2b6cb0; }
+      .flr-bar output {
+        font-weight: 700; color: #3d2b0a; font-variant-numeric: tabular-nums;
+        min-width: 30px; text-align: right; font-size: 11px;
+      }
+      .flr-btn {
+        padding: 3px 7px; border: 1px solid #ccc; border-radius: 4px;
+        background: #fff; font-size: 11px; cursor: pointer;
+        font-weight: 600; line-height: 1.4;
+      }
+      .flr-btn:hover { background: #f5f0e5; }
+      .flr-btn.on { background: #e8f0fe; border-color: #2b6cb0; color: #2b6cb0; }
+      .flr-btn.rst { color: #888; }
+      .flr-section { display: flex; align-items: center; gap: 4px; }
+      .flr-divider { width: 1px; height: 18px; background: #e0d5b8; margin: 0 2px; }
+      .flr-uncal {
+        position: absolute; inset: 0; display: flex;
+        align-items: center; justify-content: center;
+        color: #999; font-size: 12px; pointer-events: none;
+      }
+      .flr-wrap:not(.flr-uncalibrated) .flr-uncal { display: none; }
+      .flr-wrap.flr-uncalibrated .flr-bar,
+      .flr-wrap.flr-uncalibrated .flr-track { opacity: 0.3; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#top" aria-label="真实屏幕尺子首页">
+          <span class="brand-mark" aria-hidden="true">
+            <i></i><i></i><i></i><i></i><i></i>
+          </span>
+          <span>真实屏幕尺子</span>
+        </a>
+        <div class="topbar-note"><span class="status-dot"></span>本地运行 · 不上传数据</div>
+      </header>
 
-    <!-- 工具栏 -->
-    <div id="toolbar">
-        <button id="btn-ruler" class="active" title="直尺模式 (R键)">
-            📏 直尺
-        </button>
-        <button id="btn-rect" class="accent2" title="矩形测量模式 (M键)">
-            ⬜ 矩形框
-        </button>
-        <button id="btn-reset-ruler" title="重置当前位置 (0键)">
-            🔄 重置
-        </button>
-        <button id="btn-calibrate" title="重新校准 (C键)">
-            ⚙️ 校准
-        </button>
-        <button id="btn-measure-screen" title="一键测量整个屏幕">
-            📐 测量屏幕
-        </button>
-        <button id="btn-measure-diagonal" title="一键测量屏幕对角线">
-            📏 测量对角线
-        </button>
-        <button id="btn-help" title="使用帮助 (H键)">
-            ❓
-        </button>
-    </div>
+      <section class="hero" id="top">
+        <p class="eyebrow">PHYSICAL DISPLAY MEASUREMENT</p>
+        <h1>测量显示器的真实尺寸</h1>
+        <p class="hero-copy">用 A4 纸、身份证/银行卡、人民币纸币或硬币等常见实物校准后，得到显示区域的长、宽与对角线，单位为现实生活中的厘米。</p>
+      </section>
 
-    <!-- 测量信息浮层 -->
-    <div id="info-display"></div>
+      <div class="workspace">
+        <section class="panel calibration-panel" aria-labelledby="calibration-title">
+          <div class="panel-heading">
+            <span class="step-number">01</span>
+            <div>
+              <p class="section-kicker">一次性校准</p>
+              <h2 id="calibration-title">校准实际长度</h2>
+            </div>
+          </div>
+          <div class="calibration-choice">
+            <label for="referenceType">参照物</label>
+            <select id="referenceType" name="referenceType">
+              <option value="a4-half-width">A4 纸宽度的一半（10.50 cm，推荐）</option>
+              <option value="a4-width">A4 纸短边/宽度（21.00 cm）</option>
+              <option value="a4-height">A4 纸长边（29.70 cm）</option>
+              <option value="id-card-long">身份证/银行卡长边（8.56 cm）</option>
+              <option value="id-card-short">身份证/银行卡短边（5.40 cm）</option>
+              <option value="rmb-100-long">100 元人民币长边（15.50 cm）</option>
+              <option value="rmb-50-long">50 元人民币长边（15.00 cm）</option>
+              <option value="rmb-20-long">20 元人民币长边（14.50 cm）</option>
+              <option value="rmb-10-long">10 元人民币长边（14.00 cm）</option>
+              <option value="rmb-5-long">5 元人民币长边（13.50 cm）</option>
+              <option value="rmb-1-long">1 元人民币长边（13.00 cm）</option>
+              <option value="coin-1y-2019">2019 版 1 元硬币直径（2.225 cm）</option>
+              <option value="coin-1y-old">旧版 1 元硬币直径（2.50 cm）</option>
+              <option value="coin-5jiao">5 角硬币直径（2.05 cm）</option>
+              <option value="coin-1jiao">1 角硬币直径（1.90 cm）</option>
+              <option value="custom">自定义已知长度</option>
+            </select>
+          </div>
+          <p class="reference-hint" id="referenceHint">把 A4 纸短边对折，使用折叠后的一半宽度。纸张越平整、对齐越仔细，结果越准。</p>
+          <label class="custom-length is-hidden" id="customLengthWrap" for="referenceLength">
+            <span>参照物实际长度</span>
+            <span class="number-field"><input id="referenceLength" type="number" min="0.1" max="100" step="0.01" value="10" inputmode="decimal" /><em>cm</em></span>
+          </label>
+          <ol class="instructions">
+            <li>选择你手边最容易找到、边缘最直的<strong>标准尺寸实物</strong>。</li>
+            <li>将实物对应的边或直径贴在屏幕上的蓝色标尺上。</li>
+            <li>拖动滑块，直到标尺两端与实物长度完全对齐，再保存校准。</li>
+          </ol>
+          <div class="calibration-stage" aria-label="实物长度校准区">
+            <div class="calibration-meta">
+              <span>请将实体参照物沿此边缘对齐</span>
+              <output id="referenceDisplay">8.56 cm</output>
+            </div>
+            <div class="calibration-ruler-wrap">
+              <div class="calibration-ruler" id="calibrationRuler" aria-hidden="true">
+                <span class="ruler-start">0</span>
+                <span class="ruler-end" id="rulerEnd">8.56 cm</span>
+              </div>
+            </div>
+            <label class="range-label" for="calibrationRange">
+              <span>调整标尺长度</span>
+              <output id="pixelDisplay">324 px</output>
+            </label>
+            <input id="calibrationRange" class="range" type="range" min="20" max="1800" value="324" step="1" />
+          </div>
+          <div class="calibration-actions">
+            <button id="saveCalibration" class="button button-primary" type="button">保存校准并测量</button>
+            <button id="resetCalibration" class="button button-quiet" type="button">清除本机校准</button>
+          </div>
+          <p class="calibration-state" id="calibrationState" role="status">尚未校准。校准后才能显示真实厘米值。</p>
+        </section>
 
-    <!-- 校准覆盖层 -->
-    <div id="calibration-overlay">
-        <div id="calibration-panel">
-            <h2>📐 屏幕校准</h2>
-            <p class="subtitle">为了让测量结果准确，请先完成校准。<br>校准后请<b>不要改变浏览器缩放</b>，否则需重新校准。</p>
-            <div class="tabs">
-                <button class="tab-btn active" data-tab="tab-card">💳 银行卡</button>
-                <button class="tab-btn" data-tab="tab-id">🆔 身份证</button>
-                <button class="tab-btn" data-tab="tab-a4">📄 A4纸</button>
-                <button class="tab-btn" data-tab="tab-coin">🪙 硬币</button>
-                <button class="tab-btn" data-tab="tab-manual">📏 手动测量</button>
-                <button class="tab-btn" data-tab="tab-direct">📐 直接输入</button>
+        <section class="panel results-panel" aria-labelledby="results-title">
+          <div class="panel-heading">
+            <span class="step-number">02</span>
+            <div>
+              <p class="section-kicker">实时结果</p>
+              <h2 id="results-title">显示器尺寸</h2>
             </div>
-            <!-- 银行卡校准 -->
-            <div class="tab-content active" id="tab-card">
-                <p style="font-size:13px;color:#ccc;margin-bottom:8px;">请将一张<b>标准银行卡/信用卡</b>放在屏幕上，<br>调整滑块使矩形框与银行卡<b>宽度完全重合</b>（银行卡宽度 = <b>8.56 cm</b>）</p>
-                <div class="ref-rect" id="card-ref-rect" style="width:280px;height:176px;">
-                    <span class="ref-rect-label">银行卡宽度 8.56cm</span>
-                </div>
-                <br>
-                <input type="range" id="card-slider" min="100" max="800" value="280" step="1">
-                <p style="font-size:12px;color:#aaa;">拖动滑块 → 当前像素宽度: <b id="card-px-val">280</b> px</p>
-                <div class="btn-row">
-                    <button class="btn" id="btn-card-confirm">✅ 确认重合，完成校准</button>
-                </div>
+            <button id="refreshMeasurements" class="icon-button" type="button" title="重新读取屏幕信息" aria-label="重新读取屏幕信息">↻</button>
+          </div>
+          <div class="result-empty" id="resultEmpty">
+            <span class="empty-icon" aria-hidden="true">⌛</span>
+            <strong>等待校准</strong>
+            <p>完成左侧校准后，这里会显示显示区域的真实厘米尺寸。</p>
+          </div>
+          <div class="result-content is-hidden" id="resultContent">
+            <div class="measurements" aria-live="polite">
+              <article class="measurement-card measurement-wide">
+                <span>屏幕长</span>
+                <strong id="widthValue">--</strong>
+                <small>水平宽度</small>
+              </article>
+              <article class="measurement-card">
+                <span>屏幕高</span>
+                <strong id="heightValue">--</strong>
+                <small>垂直高度</small>
+              </article>
+              <article class="measurement-card accent-card">
+                <span>对角线</span>
+                <strong id="diagonalValue">--</strong>
+                <small id="diagonalInches">--</small>
+              </article>
             </div>
-            <!-- 身份证校准 -->
-            <div class="tab-content" id="tab-id">
-                <p style="font-size:13px;color:#ccc;margin-bottom:8px;">请将一张<b>中国第二代身份证</b>放在屏幕上，<br>调整滑块使矩形框与身份证<b>宽度完全重合</b>（身份证宽度 = <b>8.56 cm</b>）</p>
-                <div class="ref-rect" id="id-ref-rect" style="width:280px;height:176px;">
-                    <span class="ref-rect-label">身份证宽度 8.56cm</span>
-                </div>
-                <br>
-                <input type="range" id="id-slider" min="100" max="800" value="280" step="1">
-                <p style="font-size:12px;color:#aaa;">拖动滑块 → 当前像素宽度: <b id="id-px-val">280</b> px</p>
-                <div class="btn-row">
-                    <button class="btn" id="btn-id-confirm">✅ 确认重合，完成校准</button>
-                </div>
+            <div class="monitor-section">
+              <div class="monitor-visual" id="monitorVisual" aria-label="显示器长宽比例示意图">
+                <span class="visual-width" id="visualWidth">-- cm</span>
+                <span class="visual-height" id="visualHeight">-- cm</span>
+                <span class="visual-diagonal" aria-hidden="true"></span>
+              </div>
+              <div class="screen-details">
+                <div><span>屏幕分辨率</span><strong id="resolutionValue">--</strong></div>
+                <div><span>屏幕比例</span><strong id="ratioValue">--</strong></div>
+                <div><span>校准精度</span><strong id="scaleValue">--</strong></div>
+              </div>
             </div>
-            <!-- A4纸校准 -->
-            <div class="tab-content" id="tab-a4">
-                <p style="font-size:13px;color:#ccc;margin-bottom:8px;">请将一张<b>标准A4纸</b>放在屏幕上，<br>调整滑块使矩形框与A4纸<b>宽度完全重合</b>（A4纸宽度 = <b>21 cm</b>）</p>
-                <div class="ref-rect" id="a4-ref-rect" style="width:300px;height:210px;">
-                    <span class="ref-rect-label">A4纸宽度 21cm</span>
-                </div>
-                <br>
-                <input type="range" id="a4-slider" min="150" max="600" value="300" step="1">
-                <p style="font-size:12px;color:#aaa;">拖动滑块 → 当前像素宽度: <b id="a4-px-val">300</b> px</p>
-                <div class="btn-row">
-                    <button class="btn" id="btn-a4-confirm">✅ 确认重合，完成校准</button>
-                </div>
-            </div>
-            <!-- 硬币校准 -->
-            <div class="tab-content" id="tab-coin">
-                <p style="font-size:13px;color:#ccc;margin-bottom:8px;">请将一枚<b>1元硬币</b>放在屏幕上，<br>调整滑块使硬币刚好放入<b>内圈</b>中（1元硬币直径 = <b>2.5 cm</b>）</p>
-                <div style="margin:15px auto;display:inline-block;position:relative;">
-                    <!-- 外圈（虚线） -->
-                    <div id="coin-outer-circle" style="width:100px;height:100px;border:3px dashed #f72585;border-radius:50%;display:flex;align-items:center;justify-content:center;position:relative;">
-                        <!-- 内圈（实心圆，用户放硬币的区域） -->
-                        <div id="coin-inner-circle" style="width:70px;height:70px;background:rgba(76,201,240,0.2);border:2px solid #4cc9f0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;color:rgba(255,255,255,0.9);">
-                            内圈<br>2.5cm
-                        </div>
-                    </div>
-                </div>
-                <br>
-                <input type="range" id="coin-slider" min="30" max="150" value="70" step="1">
-                <p style="font-size:12px;color:#aaa;">拖动滑块 → 内圈像素直径: <b id="coin-px-val">70</b> px</p>
-                <div class="btn-row">
-                    <button class="btn" id="btn-coin-confirm">✅ 确认，完成校准</button>
-                </div>
-            </div>
-            <!-- 手动测量 -->
-            <div class="tab-content" id="tab-manual">
-                <p style="font-size:13px;color:#ccc;margin-bottom:8px;">请用<b>真实尺子</b>测量下面这条线的长度（cm），然后输入：</p>
-                <div class="measurement-line" id="manual-line" style="width:400px;"></div>
-                <p style="font-size:12px;color:#aaa;">这条线的像素长度: <b>400 px</b></p>
-                <label style="font-size:13px;color:#ccc;">真实尺子测得的长度: 
-                    <input type="number" id="manual-cm-input" value="10.6" step="0.01" min="1" max="100" style="width:90px;"> cm
-                </label>
-                <div class="btn-row">
-                    <button class="btn" id="btn-manual-confirm">✅ 确认，完成校准</button>
-                </div>
-            </div>
-            <!-- 直接输入 -->
-            <div class="tab-content" id="tab-direct">
-                <p style="font-size:13px;color:#ccc;margin-bottom:8px;">如果您知道屏幕的实际物理参数，可直接输入：</p>
-                <label style="font-size:13px;color:#ccc;display:block;margin:6px 0;">
-                    屏幕物理宽度: <input type="number" id="direct-width-cm" value="53" step="0.1" min="5" max="200" style="width:80px;"> cm
-                </label>
-                <label style="font-size:13px;color:#ccc;display:block;margin:6px 0;">
-                    屏幕水平分辨率: <input type="number" id="direct-res-x" value="1920" step="1" min="100" max="10000" style="width:90px;"> px
-                </label>
-                <p style="font-size:11px;color:#888;">（将自动计算：像素/cm = 分辨率 / 物理宽度）</p>
-                <div class="btn-row">
-                    <button class="btn" id="btn-direct-confirm">✅ 确认，完成校准</button>
-                </div>
-            </div>
+          </div>
+          <aside class="notice">
+            <span aria-hidden="true">i</span>
+            <p>结果测量的是<strong>显示区域</strong>，不含显示器外框。更换显示器、缩放级别或浏览器缩放后，请重新校准。</p>
+          </aside>
+        </section>
+      </div>
+
+      <section class="panel ruler-panel" aria-labelledby="ruler-title">
+        <div class="panel-heading">
+          <span class="step-number">03</span>
+          <div>
+            <p class="section-kicker">屏幕直尺</p>
+            <h2 id="ruler-title">把屏幕当成一把尺子</h2>
+          </div>
         </div>
-    </div>
-
-    <!-- 帮助覆盖层 -->
-    <div id="help-overlay" style="position:fixed;inset:0;z-index:99;background:rgba(0,0,0,0.8);display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);">
-        <div style="background:var(--panel-bg);border-radius:20px;padding:24px 28px;max-width:500px;width:90%;color:var(--text);border:1px solid var(--border);text-align:left;line-height:1.7;font-size:14px;">
-            <h3 style="text-align:center;color:#fff;margin-bottom:12px;">📖 使用帮助</h3>
-            <p style="background:rgba(76,201,240,0.15);padding:10px;border-radius:8px;border:1px solid rgba(76,201,240,0.3);">
-                <b>💡 重要提示：</b><br>
-                - 推荐使用 <b>Edge 浏览器</b><br>
-                - 按 <b>F11</b> 键全屏浏览器，这样就可以测量整个屏幕了！
-            </p>
-            <p><b>📏 直尺模式：</b></p>
-            <ul style="padding-left:20px;">
-                <li><b>拖拽红色起点</b> → 移动直尺位置</li>
-                <li><b>拖拽蓝色终点</b> → 改变长度和角度</li>
-                <li><b>拖拽尺身</b> → 整体移动直尺</li>
-                <li><b>按住Shift</b> → 角度吸附（0°/45°/90°等）</li>
-                <li>直尺自动显示刻度（cm）</li>
-                <li><b>起点/终点可拖到屏幕外</b>，方便测对角线</li>
-                <li>直尺默认更长，便于测量大屏幕</li>
-            </ul>
-            <p style="margin-top:8px;"><b>⬜ 矩形框模式：</b></p>
-            <ul style="padding-left:20px;">
-                <li><b>拖拽四角手柄</b> → 调整矩形大小</li>
-                <li><b>拖拽边框</b> → 移动矩形位置</li>
-                <li>自动显示<b>宽、高、对角线</b>长度</li>
-            </ul>
-            <p style="margin-top:8px;"><b>📐 快速测量：</b></p>
-            <ul style="padding-left:20px;">
-                <li>点击「📐 测量屏幕」按钮 → 一键测量整个屏幕尺寸</li>
-                <li>点击「📏 测量对角线」按钮 → 一键测量屏幕对角线</li>
-                <li>同时显示宽、高和对角线长度</li>
-            </ul>
-            <p style="margin-top:8px;font-size:12px;color:#aaa;">快捷键: <b>R</b>=直尺 <b>M</b>=矩形框 <b>C</b>=校准 <b>0</b>=重置 <b>Shift</b>=角度吸附 <b>H</b>=帮助 <b>Esc</b>=关闭帮助</p>
-            <div style="text-align:center;margin-top:14px;">
-                <button class="btn secondary" onclick="document.getElementById('help-overlay').style.display='none'" style="background:var(--accent);color:#000;border:none;padding:10px 20px;border-radius:20px;cursor:pointer;font-weight:700;font-family:inherit;">关闭</button>
-            </div>
+        <div class="ruler-empty" id="rulerEmpty">
+          <strong>先完成校准</strong>
+          <p>校准后这里会出现一把真实厘米直尺，可以调整长度，用来测量身边的小物品。</p>
         </div>
+        <div class="screen-ruler-content is-hidden" id="screenRulerContent">
+          <div class="ruler-toolbar">
+            <label class="ruler-length-field" for="rulerLengthNumber">
+              <span>尺子长度</span>
+              <span class="number-field"><input id="rulerLengthNumber" type="number" min="1" max="80" step="0.5" value="15" inputmode="decimal" /><em>cm</em></span>
+            </label>
+            <label class="ruler-range-label" for="rulerLengthRange">
+              <span>拖动改变长度</span>
+              <output id="rulerLengthDisplay">15.0 cm</output>
+            </label>
+            <input id="rulerLengthRange" class="range" type="range" min="1" max="80" value="15" step="0.5" />
+          </div>
+          <div class="ruler-scroll" aria-label="真实厘米直尺，可横向滚动查看较长长度">
+            <div class="screen-ruler" id="screenRuler">
+              <div class="ruler-ticks" id="rulerTicks" aria-hidden="true"></div>
+            </div>
+          </div>
+          <p class="ruler-help" id="rulerHelp">把物品贴进屏幕下沿或直尺边缘，从 0 开始读数。若浏览器缩放或系统缩放变化，请重新校准。</p>
+        </div>
+      </section>
+
+      <section class="principle" aria-labelledby="principle-title">
+        <div>
+          <p class="section-kicker">为什么需要校准？</p>
+          <h2 id="principle-title">网页中的厘米不一定是真实厘米</h2>
+        </div>
+        <p>浏览器会因系统缩放、显示器像素密度和缩放比例而改变 CSS 像素的物理大小。此工具用你亲自对齐的实物建立"每厘米对应多少屏幕单位"的比例，因此计算结果对应真实长度。</p>
+      </section>
+    </main>
+
+    <footer>真实屏幕尺子 · 所有校准数据仅保存在当前浏览器</footer>
+
+    <!-- ===== 浮动直尺（覆盖层） ===== -->
+    <div class="flr-wrap flr-uncalibrated" id="flrWrap" style="left:120px;top:120px;">
+      <div class="flr-body" id="flrBody">
+        <div class="flr-zero">0</div>
+        <div class="flr-track">
+          <div class="flr-ticks" id="flrTicksFloat"></div>
+          <div class="flr-uncal">请先完成校准</div>
+        </div>
+        <div class="flr-handle" id="flrHandle" title="拖拽改变长度"></div>
+      </div>
+      <div class="flr-bar" id="flrBar">
+        <div class="flr-section">
+          <button class="flr-btn on" id="flrAng0" title="水平 (0°)">━ 0°</button>
+          <button class="flr-btn" id="flrAng45" title="45°">╱ 45°</button>
+          <button class="flr-btn" id="flrAng90" title="垂直 (90°)">┃ 90°</button>
+          <label>旋转</label>
+          <input type="range" id="flrAngRange" min="-180" max="180" value="0" step="1" title="旋转角度" />
+          <output id="flrAngOut">0°</output>
+        </div>
+        <span class="flr-divider"></span>
+        <div class="flr-section">
+          <label>长度</label>
+          <input type="range" id="flrLenRange" min="1" max="80" value="15" step="0.5" />
+          <output id="flrLenOut">15.0 cm</output>
+        </div>
+        <span class="flr-divider"></span>
+        <button class="flr-btn rst" id="flrReset" title="复位">↺</button>
+        <button class="flr-btn rst" id="flrClose" title="隐藏">✕</button>
+      </div>
     </div>
 
-    <canvas id="main-canvas"></canvas>
+    <script src="script.js"></script>
 
-    <script src="app.js"></script>
-</body>
+    <!-- ===== 浮动直尺脚本 ===== -->
+    <script>
+    (() => {
+      "use strict";
+      var STORAGE_KEY = "physical-screen-ruler-calibration-v1";
+      var wrap    = document.getElementById("flrWrap");
+      var body    = document.getElementById("flrBody");
+      var ticksEl = document.getElementById("flrTicksFloat");
+      var handle  = document.getElementById("flrHandle");
+      var ang0    = document.getElementById("flrAng0");
+      var ang45   = document.getElementById("flrAng45");
+      var ang90   = document.getElementById("flrAng90");
+      var angRange = document.getElementById("flrAngRange");
+      var angOut   = document.getElementById("flrAngOut");
+      var lenRange = document.getElementById("flrLenRange");
+      var lenOut   = document.getElementById("flrLenOut");
+      var btnReset = document.getElementById("flrReset");
+      var btnClose = document.getElementById("flrClose");
+
+      var angle = 0;
+      var rulerCm = 15;
+      var ppcm = null;
+
+      function readCal() {
+        try {
+          var raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return null;
+          var data = JSON.parse(raw);
+          if (data && typeof data.pixelsPerCm === "number" && data.pixelsPerCm > 0) return data;
+        } catch (e) {}
+        return null;
+      }
+
+      function applyCal() {
+        var cal = readCal();
+        if (cal) { ppcm = cal.pixelsPerCm; wrap.classList.remove("flr-uncalibrated"); }
+        else { ppcm = null; wrap.classList.add("flr-uncalibrated"); }
+        redraw();
+      }
+
+      function redraw() {
+        ticksEl.innerHTML = "";
+        if (!ppcm) return;
+        var totalMm = Math.round(rulerCm * 10);
+        var frag = document.createDocumentFragment();
+        for (var mm = 0; mm <= totalMm; mm++) {
+          var tick = document.createElement("div");
+          var is10 = mm % 10 === 0;
+          var is5  = mm % 5 === 0;
+          tick.className = is10 ? "flr-tick t10" : is5 ? "flr-tick t5" : "flr-tick";
+          tick.style.left = (mm * ppcm / 10) + "px";
+          if (is10 && mm > 0) {
+            var lbl = document.createElement("span");
+            lbl.className = "flr-lbl"; lbl.textContent = String(mm / 10);
+            tick.appendChild(lbl);
+          }
+          frag.appendChild(tick);
+        }
+        ticksEl.appendChild(frag);
+      }
+
+      function updateSize() {
+        if (!ppcm) return;
+        var px = Math.round(rulerCm * ppcm);
+        body.style.width  = Math.max(100, px + 44) + "px";
+        body.style.height = "52px";
+        redraw();
+      }
+
+      function updateAngle() {
+        body.style.transform = "rotate(" + angle + "deg)";
+        angRange.value = angle;
+        angOut.value = angle + "°";
+        ang0.classList.toggle("on", angle === 0);
+        ang45.classList.toggle("on", angle === 45 || angle === -45);
+        ang90.classList.toggle("on", angle === 90 || angle === -90);
+        var a = ((angle % 360) + 360) % 360;
+        if (a < 20 || a > 340 || (a > 160 && a < 200)) handle.style.cursor = "ew-resize";
+        else if ((a > 70 && a < 110) || (a > 250 && a < 290)) handle.style.cursor = "ns-resize";
+        else handle.style.cursor = "move";
+      }
+
+      function syncLen(v) {
+        rulerCm = Math.max(1, Math.min(80, Number(v) || 15));
+        lenRange.value = rulerCm;
+        lenOut.value = rulerCm.toFixed(1) + " cm";
+        updateSize();
+      }
+
+      function syncAngle(v) {
+        angle = Math.max(-180, Math.min(180, Number(v) || 0));
+        updateAngle();
+      }
+
+      var drag = null;
+
+      function startDrag(e, mode) {
+        e.preventDefault();
+        var cx = e.touches ? e.touches[0].clientX : e.clientX;
+        var cy = e.touches ? e.touches[0].clientY : e.clientY;
+        var l = parseFloat(wrap.style.left) || 0;
+        var t = parseFloat(wrap.style.top) || 0;
+        drag = { mode: mode, sx: cx, sy: cy, sl: l, st: t, sLen: rulerCm };
+        if (mode === "move") wrap.classList.add("dragging");
+        document.addEventListener("mousemove", onDrag);
+        document.addEventListener("mouseup", endDrag);
+        document.addEventListener("touchmove", onDrag, { passive: false });
+        document.addEventListener("touchend", endDrag);
+      }
+
+      function onDrag(e) {
+        if (!drag) return;
+        e.preventDefault();
+        var cx = e.touches ? e.touches[0].clientX : e.clientX;
+        var cy = e.touches ? e.touches[0].clientY : e.clientY;
+
+        if (drag.mode === "move") {
+          wrap.style.left = (drag.sl + (cx - drag.sx)) + "px";
+          wrap.style.top  = (drag.st + (cy - drag.sy)) + "px";
+        } else if (drag.mode === "resize" && ppcm) {
+          var rad = angle * Math.PI / 180;
+          var dx = cx - drag.sx;
+          var dy = cy - drag.sy;
+          var proj = dx * Math.cos(rad) + dy * Math.sin(rad);
+          var n = Math.max(1, Math.min(80, drag.sLen + proj / ppcm));
+          syncLen(Math.round(n * 2) / 2);
+        }
+      }
+
+      function endDrag() {
+        if (drag) { wrap.classList.remove("dragging"); drag = null; }
+        document.removeEventListener("mousemove", onDrag);
+        document.removeEventListener("mouseup", endDrag);
+        document.removeEventListener("touchmove", onDrag);
+        document.removeEventListener("touchend", endDrag);
+      }
+
+      document.addEventListener("keydown", function(e) {
+        var tag = document.activeElement ? document.activeElement.tagName : "";
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        if (wrap.style.display === "none") return;
+        if (wrap.classList.contains("flr-uncalibrated")) return;
+        var shift = e.shiftKey;
+        switch (e.key) {
+          case "ArrowLeft":
+            e.preventDefault();
+            syncLen(rulerCm - (shift ? 0.5 : 0.1));
+            break;
+          case "ArrowRight":
+            e.preventDefault();
+            syncLen(rulerCm + (shift ? 0.5 : 0.1));
+            break;
+          case "ArrowUp":
+            e.preventDefault();
+            syncAngle(Math.max(-180, Math.min(180, angle + (shift ? 5 : 1))));
+            break;
+          case "ArrowDown":
+            e.preventDefault();
+            syncAngle(Math.max(-180, Math.min(180, angle - (shift ? 5 : 1))));
+            break;
+        }
+      });
+
+      function reset() {
+        wrap.style.left = "120px";
+        wrap.style.top  = "120px";
+        syncAngle(0);
+        syncLen(15);
+      }
+
+      body.addEventListener("mousedown", function(e) {
+        if (e.target === handle || handle.contains(e.target)) return;
+        startDrag(e, "move");
+      });
+      body.addEventListener("touchstart", function(e) {
+        if (e.target === handle || handle.contains(e.target)) return;
+        startDrag(e, "move");
+      }, { passive: false });
+
+      handle.addEventListener("mousedown", function(e) { e.stopPropagation(); startDrag(e, "resize"); });
+      handle.addEventListener("touchstart", function(e) { e.stopPropagation(); startDrag(e, "resize"); }, { passive: false });
+
+      lenRange.addEventListener("input", function() { syncLen(parseFloat(lenRange.value)); });
+      angRange.addEventListener("input", function() { syncAngle(parseFloat(angRange.value)); });
+      ang0.addEventListener("click", function() { syncAngle(0); });
+      ang45.addEventListener("click", function() { syncAngle(45); });
+      ang90.addEventListener("click", function() { syncAngle(90); });
+      btnReset.addEventListener("click", reset);
+      btnClose.addEventListener("click", function() { wrap.style.display = "none"; });
+
+      window.addEventListener("storage", applyCal);
+      window.addEventListener("floating-ruler:calibration-changed", applyCal);
+      window.addEventListener("focus", applyCal);
+
+      applyCal();
+      if (ppcm) { syncAngle(0); syncLen(15); }
+    })();
+    </script>
+  </body>
 </html>

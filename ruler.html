@@ -1,0 +1,781 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>屏幕直尺</title>
+<style>
+  :root {
+    --ruler-bg: rgba(255, 248, 225, 0.92);
+    --ruler-border: #b98d42;
+    --tick-color: #5c3f0d;
+    --tick-mm: #8b6914;
+    --handle-color: #d4952b;
+    --text-color: #3d2b0a;
+    --panel-bg: #fffef9;
+    --panel-border: #e0d5b8;
+    --blue: #2b6cb0;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    background: #f0f0f0;
+    min-height: 100vh;
+    user-select: none;
+    overflow: hidden;
+    cursor: default;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+    background-size: 20px 20px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .ruler-container {
+    position: fixed;
+    z-index: 1000;
+    filter: drop-shadow(0 4px 16px rgba(0,0,0,0.18));
+    transition: filter 0.1s;
+  }
+  .ruler-container.dragging {
+    filter: drop-shadow(0 8px 28px rgba(0,0,0,0.28));
+  }
+
+  .ruler-body {
+    display: flex;
+    align-items: stretch;
+    position: relative;
+    cursor: grab;
+    transform-origin: 32px 50%;
+    transition: transform 0.12s ease;
+    background: var(--ruler-bg);
+    border: 2px solid var(--ruler-border);
+    border-radius: 6px;
+    min-width: 100px;
+    min-height: 52px;
+    height: 52px;
+    overflow: hidden;
+  }
+  .ruler-container.vertical .ruler-body {
+    min-width: 52px;
+    min-height: 100px;
+    width: 52px;
+    height: auto;
+    flex-direction: column;
+  }
+  .ruler-body:active { cursor: grabbing; }
+
+  .ruler-zero {
+    flex: 0 0 32px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 4px;
+    border-right: 2px solid var(--ruler-border);
+    background: rgba(185, 141, 66, 0.13);
+    color: var(--tick-color);
+    font-size: 11px;
+    font-weight: 800;
+    min-width: 32px;
+  }
+  .ruler-container.vertical .ruler-zero {
+    flex: 0 0 28px;
+    border-right: 0;
+    border-bottom: 2px solid var(--ruler-border);
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 4px;
+    padding-bottom: 0;
+    min-width: auto;
+  }
+
+  .ruler-ticks-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    min-width: 40px;
+  }
+  .ruler-container.vertical .ruler-ticks-wrap {
+    min-width: auto;
+    min-height: 40px;
+  }
+  .ruler-ticks {
+    position: absolute;
+    inset: 0;
+  }
+
+  .tick {
+    position: absolute;
+    top: 0;
+    width: 1px;
+    height: 14px;
+    background: var(--tick-mm);
+  }
+  .ruler-container.vertical .tick {
+    top: auto;
+    left: 0;
+    width: 14px;
+    height: 1px;
+  }
+  .tick.tick-5mm {
+    height: 22px;
+    width: 1px;
+    background: var(--tick-color);
+  }
+  .ruler-container.vertical .tick.tick-5mm {
+    width: 22px;
+    height: 1px;
+  }
+  .tick.tick-cm {
+    height: 30px;
+    width: 2px;
+    background: var(--tick-color);
+  }
+  .ruler-container.vertical .tick.tick-cm {
+    width: 30px;
+    height: 2px;
+  }
+  .tick .tick-label {
+    position: absolute;
+    top: 32px;
+    left: 0;
+    transform: translateX(-50%);
+    color: var(--tick-color);
+    font-size: 10px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .ruler-container.vertical .tick .tick-label {
+    top: auto;
+    left: 32px;
+    transform: translateY(-50%);
+  }
+
+  .ruler-handle {
+    flex: 0 0 14px;
+    background: var(--handle-color);
+    border-radius: 0 4px 4px 0;
+    cursor: ew-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 14px;
+    transition: background 0.15s;
+  }
+  .ruler-handle:hover { background: #c7871e; }
+  .ruler-handle::after {
+    content: "";
+    width: 2px;
+    height: 18px;
+    border-radius: 1px;
+    background: rgba(255,255,255,0.7);
+  }
+  .ruler-container.vertical .ruler-handle {
+    flex: 0 0 14px;
+    border-radius: 0 0 4px 4px;
+    cursor: ns-resize;
+    min-width: auto;
+    min-height: 14px;
+  }
+  .ruler-container.vertical .ruler-handle::after {
+    width: 18px;
+    height: 2px;
+  }
+
+  .control-panel {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 2000;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 13px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.1);
+    min-width: 220px;
+    max-width: 260px;
+  }
+  .control-panel h3 {
+    font-size: 14px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-color);
+  }
+  .control-panel label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    color: #5c4a2e;
+    font-size: 12px;
+  }
+  .control-panel input[type="range"] {
+    flex: 1;
+    accent-color: var(--blue);
+  }
+  .control-panel input[type="number"] {
+    width: 56px;
+    padding: 4px 6px;
+    border: 1px solid #d0c8b0;
+    border-radius: 5px;
+    font-size: 12px;
+    text-align: center;
+    background: #fff;
+  }
+  .control-panel output {
+    font-weight: 700;
+    color: var(--text-color);
+    font-variant-numeric: tabular-nums;
+    min-width: 42px;
+    text-align: right;
+  }
+  .btn-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .btn {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: #f5f0e5; }
+  .btn.primary {
+    background: var(--blue);
+    color: #fff;
+    border-color: var(--blue);
+  }
+  .btn.primary:hover { background: #1d5a96; }
+  .btn.active {
+    background: #e8f0fe;
+    border-color: var(--blue);
+    color: var(--blue);
+  }
+
+  .calibration-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+  }
+  .calibration-overlay.hidden { display: none; }
+  .calibration-dialog {
+    background: #fff;
+    border-radius: 14px;
+    padding: 24px;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+  }
+  .calibration-dialog h3 { margin-bottom: 12px; font-size: 16px; }
+  .calibration-dialog select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ccc;
+    border-radius: 7px;
+    font-size: 13px;
+    margin-bottom: 10px;
+  }
+  .calibration-dialog .calibration-ruler {
+    height: 48px;
+    margin: 12px 0;
+    border: 2px solid #2b6cb0;
+    border-radius: 5px;
+    background: #e7f3ff;
+    position: relative;
+    min-width: 20px;
+    transition: width 0.08s;
+  }
+  .calibration-dialog .calibration-ruler::before,
+  .calibration-dialog .calibration-ruler::after {
+    content: "";
+    position: absolute;
+    top: -6px;
+    width: 2px;
+    height: 56px;
+    background: #2b6cb0;
+  }
+  .calibration-dialog .calibration-ruler::before { left: -2px; }
+  .calibration-dialog .calibration-ruler::after { right: -2px; }
+  .calibration-dialog .cal-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #555;
+    margin-bottom: 4px;
+  }
+  .calibration-dialog input[type="range"] {
+    width: 100%;
+    accent-color: #2b6cb0;
+  }
+  .calibration-dialog .btn-row { margin-top: 14px; }
+
+  .hint-text {
+    font-size: 11px;
+    color: #888;
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="ruler-container" id="rulerContainer">
+  <div class="ruler-body" id="rulerBody">
+    <div class="ruler-zero">0</div>
+    <div class="ruler-ticks-wrap">
+      <div class="ruler-ticks" id="rulerTicks"></div>
+    </div>
+    <div class="ruler-handle" id="rulerHandle" title="拖动改变尺子长度"></div>
+  </div>
+</div>
+
+<div class="control-panel" id="controlPanel">
+  <h3>📏 屏幕直尺</h3>
+  <label>
+    <span>旋转角度</span>
+    <output id="angleOutput">0°</output>
+  </label>
+  <div class="btn-row">
+    <button class="btn active" id="btnAng0">0°</button>
+    <button class="btn" id="btnAng45">45°</button>
+    <button class="btn" id="btnAng90">90°</button>
+  </div>
+  <input type="range" id="angleRange" min="-180" max="180" value="0" step="1" />
+  <label>
+    <span>长度</span>
+    <output id="lengthOutput">15.0 cm</output>
+  </label>
+  <input type="range" id="lengthRange" min="1" max="80" value="15" step="0.5" />
+  <label>
+    <span>手动输入</span>
+    <input type="number" id="lengthNumber" min="1" max="80" step="0.5" value="15" />
+    <span>cm</span>
+  </label>
+  <div class="btn-row">
+    <button class="btn active" id="btnHorizontal">— 水平</button>
+    <button class="btn" id="btnVertical">| 垂直</button>
+  </div>
+  <div class="btn-row">
+    <button class="btn primary" id="btnCalibrate">📐 校准</button>
+    <button class="btn" id="btnReset">↺ 复位</button>
+  </div>
+  <p class="hint-text">拖拽尺子中间移动 · 拖拽右端棕黄色手柄改变长度 · 先校准再使用</p>
+</div>
+
+<div class="calibration-overlay hidden" id="calibrationOverlay">
+  <div class="calibration-dialog">
+    <h3>📐 校准屏幕直尺</h3>
+    <select id="refSelect">
+      <option value="a4-half">A4 纸宽度的一半（10.50 cm，推荐）</option>
+      <option value="a4-width">A4 纸短边 / 宽度（21.00 cm）</option>
+      <option value="a4-height">A4 纸长边（29.70 cm）</option>
+      <option value="id-long">身份证/银行卡长边（8.56 cm）</option>
+      <option value="id-short">身份证/银行卡短边（5.40 cm）</option>
+      <option value="rmb100">100 元人民币长边（15.50 cm）</option>
+      <option value="rmb50">50 元人民币长边（15.00 cm）</option>
+      <option value="rmb20">20 元人民币长边（14.50 cm）</option>
+      <option value="rmb10">10 元人民币长边（14.00 cm）</option>
+      <option value="rmb5">5 元人民币长边（13.50 cm）</option>
+      <option value="rmb1">1 元人民币纸币长边（13.00 cm）</option>
+      <option value="custom">自定义已知长度</option>
+    </select>
+    <div class="cal-label">
+      <span>将实物贴在此标尺上</span>
+      <strong id="refLengthDisplay">10.50 cm</strong>
+    </div>
+    <div style="overflow:hidden; padding: 6px 0;">
+      <div class="calibration-ruler" id="calibrationRuler"></div>
+    </div>
+    <div class="cal-label">
+      <span>拖动滑块使标尺两端与实物对齐</span>
+      <output id="pixelDisplay">200 px</output>
+    </div>
+    <input type="range" id="calibrationRange" min="20" max="1600" value="200" step="1" />
+    <div id="customLengthRow" style="display:none; margin-top:8px;">
+      <label style="display:flex; justify-content:space-between; align-items:center;">
+        <span>实物实际长度</span>
+        <span><input type="number" id="customLength" min="1" max="100" step="0.01" value="10" style="width:70px;" /> cm</span>
+      </label>
+    </div>
+    <p class="hint-text" id="calHint">把 A4 纸短边对折，使用折叠后的一半宽度。纸张越平整、对齐越仔细，结果越准。</p>
+    <div class="btn-row">
+      <button class="btn primary" id="btnSaveCal">保存校准</button>
+      <button class="btn" id="btnCancelCal">取消</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const REFERENCES = {
+    "a4-half":    { length: 10.50, hint: "把 A4 纸短边对折，使用折叠后的一半宽度。纸张越平整、对齐越仔细，结果越准。" },
+    "a4-width":   { length: 21.00, hint: "使用 A4 纸 21 cm 的短边。屏幕足够宽时优先用这个，长度越大手动对齐误差越小。" },
+    "a4-height":  { length: 29.70, hint: "使用 A4 纸 29.7 cm 的长边。适合大屏或竖向校准，注意不要让纸张弯曲。" },
+    "id-long":    { length: 8.56,  hint: "身份证、银行卡和多数交通卡都接近 ID-1 标准，长边为 8.56 cm。" },
+    "id-short":   { length: 5.40,  hint: "身份证、银行卡的短边约为 5.40 cm。边越短，误差影响越明显。" },
+    "rmb100":     { length: 15.50, hint: "使用 100 元人民币长边。纸币要尽量铺平，卷边会影响对齐。" },
+    "rmb50":      { length: 15.00, hint: "使用 50 元人民币长边。建议贴紧屏幕并保持纸币平直。" },
+    "rmb20":      { length: 14.50, hint: "使用 20 元人民币长边。" },
+    "rmb10":      { length: 14.00, hint: "使用 10 元人民币长边。适合没有 A4 纸或卡片时校准。" },
+    "rmb5":       { length: 13.50, hint: "使用 5 元人民币长边。新版 5 元纸币长度为 13.5 cm。" },
+    "rmb1":       { length: 13.00, hint: "使用 1 元人民币纸币长边。" },
+    "custom":     { length: null, hint: "输入你亲自测量过的实物长度，例如绳子、木条、书本边长或两枚物品拼接后的长度。" }
+  };
+
+  const STORAGE_KEY = "screen-ruler-cal-v2";
+
+  const rulerContainer = document.getElementById("rulerContainer");
+  const rulerBody = document.getElementById("rulerBody");
+  const rulerTicksEl = document.getElementById("rulerTicks");
+  const rulerHandle = document.getElementById("rulerHandle");
+  const lengthRange = document.getElementById("lengthRange");
+  const lengthNumber = document.getElementById("lengthNumber");
+  const lengthOutput = document.getElementById("lengthOutput");
+  const btnHorizontal = document.getElementById("btnHorizontal");
+  const btnVertical = document.getElementById("btnVertical");
+  const btnCalibrate = document.getElementById("btnCalibrate");
+  const btnReset = document.getElementById(""btnReset"");
+  const angleRange = document.getElementById(""angleRange"");
+  const angleOutput = document.getElementById(""angleOutput"");
+  const btnAng0 = document.getElementById(""btnAng0"");
+  const btnAng45 = document.getElementById(""btnAng45"");
+  const btnAng90 = document.getElementById(""btnAng90"");
+  const calibrationOverlay = document.getElementById("calibrationOverlay");
+  const refSelect = document.getElementById("refSelect");
+  const refLengthDisplay = document.getElementById("refLengthDisplay");
+  const calibrationRuler = document.getElementById("calibrationRuler");
+  const calibrationRange = document.getElementById("calibrationRange");
+  const pixelDisplay = document.getElementById("pixelDisplay");
+  const calHint = document.getElementById("calHint");
+  const customLengthRow = document.getElementById("customLengthRow");
+  const customLengthInput = document.getElementById("customLength");
+  const btnSaveCal = document.getElementById("btnSaveCal");
+  const btnCancelCal = document.getElementById("btnCancelCal");
+
+  let orientation = "horizontal";
+  let rulerLengthCm = 15;
+  let pixelsPerCm = null;
+  let rulerPos = { x: 100, y: 100 };
+
+  function loadCalibration() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (data && typeof data.pixelsPerCm === "number" && data.pixelsPerCm > 0) return data;
+    } catch {}
+    return null;
+  }
+
+  function saveCalibration(ppcm) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        pixelsPerCm: ppcm,
+        savedAt: Date.now()
+      }));
+    } catch {}
+  }
+
+  function clearCalibration() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    pixelsPerCm = null;
+  }
+
+  function buildTicks() {
+    rulerTicksEl.innerHTML = "";
+    if (!pixelsPerCm) return;
+
+    const totalMm = Math.round(rulerLengthCm * 10);
+    const frag = document.createDocumentFragment();
+
+    for (let mm = 0; mm <= totalMm; mm++) {
+      const tick = document.createElement("div");
+      const isCm = mm % 10 === 0;
+      const is5mm = mm % 5 === 0;
+
+      if (isCm) {
+        tick.className = "tick tick-cm";
+      } else if (is5mm) {
+        tick.className = "tick tick-5mm";
+      } else {
+        tick.className = "tick";
+      }
+
+      tick.style.left = (mm * pixelsPerCm / 10) + "px";
+
+      if (isCm && mm > 0) {
+        const label = document.createElement("span");
+        label.className = "tick-label";
+        label.textContent = String(mm / 10);
+        tick.appendChild(label);
+      }
+
+      frag.appendChild(tick);
+    }
+    rulerTicksEl.appendChild(frag);
+  }
+
+  function updateRulerSize() {
+    if (!pixelsPerCm) {
+      rulerLengthCm = 15;
+      lengthRange.value = 15;
+      lengthNumber.value = 15;
+      lengthOutput.value = "未校准";
+      rulerBody.style.width = "200px";
+      rulerBody.style.height = "52px";
+      rulerContainer.classList.remove("vertical");
+      rulerTicksEl.innerHTML = "";
+      const label = document.createElement("span");
+      label.style.cssText = "position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#999;font-size:12px;white-space:nowrap;";
+      label.textContent = "请先校准";
+      rulerTicksEl.appendChild(label);
+      return;
+    }
+
+    const rulerPx = Math.round(rulerLengthCm * pixelsPerCm);
+    if (orientation === "horizontal") {
+      rulerBody.style.width = Math.max(100, rulerPx + 46) + "px";
+      rulerBody.style.height = "52px";
+    } else {
+      rulerBody.style.height = Math.max(100, rulerPx + 42) + "px";
+      rulerBody.style.width = "52px";
+    }
+    buildTicks();
+  }
+
+  function syncLength(value) {
+    rulerLengthCm = Math.max(1, Math.min(80, Number(value) || 15));
+    lengthRange.value = rulerLengthCm;
+    lengthNumber.value = rulerLengthCm;
+    lengthOutput.value = rulerLengthCm.toFixed(1) + " cm";
+    updateRulerSize();
+  }
+
+  function setOrientation(dir) {
+    orientation = dir;
+    if (dir === "horizontal") {
+      rulerContainer.classList.remove("vertical");
+      btnHorizontal.classList.add("active");
+      btnVertical.classList.remove("active");
+    } else {
+      rulerContainer.classList.add("vertical");
+      btnVertical.classList.add("active");
+      btnHorizontal.classList.remove("active");
+    }
+    updateRulerSize();
+    /* no clamping - allow off-screen */
+  }
+
+  function _unused_clampPosition() {
+    const rect = rulerContainer.getBoundingClientRect();
+    const maxX = window.innerWidth - rect.width - 10;
+    const maxY = window.innerHeight - rect.height - 10;
+    rulerPos.x = Math.max(10, Math.min(maxX, rulerPos.x));
+    rulerPos.y = Math.max(10, Math.min(maxY, rulerPos.y));
+    rulerContainer.style.left = rulerPos.x + "px";
+    rulerContainer.style.top = rulerPos.y + "px";
+  }
+
+  let dragState = null;
+
+  function startDrag(e, mode) {
+    e.preventDefault();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    dragState = {
+      mode,
+      startX: clientX,
+      startY: clientY,
+      startLeft: rulerPos.x,
+      startTop: rulerPos.y,
+      startLength: rulerLengthCm
+    };
+
+    if (mode === "move") {
+      rulerContainer.classList.add("dragging");
+    }
+
+    document.addEventListener("mousemove", onDrag);
+    document.addEventListener("mouseup", endDrag);
+    document.addEventListener("touchmove", onDrag, { passive: false });
+    document.addEventListener("touchend", endDrag);
+  }
+
+  function onDrag(e) {
+    if (!dragState) return;
+    e.preventDefault();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    if (dragState.mode === "move") {
+      rulerPos.x = dragState.startLeft + (clientX - dragState.startX);
+      rulerPos.y = dragState.startTop + (clientY - dragState.startY);
+      rulerContainer.style.left = rulerPos.x + "px";
+      rulerContainer.style.top = rulerPos.y + "px";
+    } else if (dragState.mode === "resize" && pixelsPerCm) {
+      const rad = angle * Math.PI / 180;
+      const dx = clientX - dragState.startX;
+      const dy = clientY - dragState.startY;
+      const deltaCm = (dx * Math.cos(rad) + dy * Math.sin(rad)) / pixelsPerCm;
+      const newLength = Math.max(1, Math.min(80, dragState.startLength + deltaCm));
+      syncLength(Math.round(newLength * 2) / 2);
+    }
+  }
+
+  function endDrag() {
+    if (dragState) {
+      rulerContainer.classList.remove("dragging");
+      dragState = null;
+    }
+    /* no clamping - allow off-screen */
+    document.removeEventListener("mousemove", onDrag);
+    document.removeEventListener("mouseup", endDrag);
+    document.removeEventListener("touchmove", onDrag);
+    document.removeEventListener("touchend", endDrag);
+  }
+
+  function getRefLength() {
+    const key = refSelect.value;
+    if (key === "custom") {
+      const v = parseFloat(customLengthInput.value);
+      return isFinite(v) && v > 0 ? v : NaN;
+    }
+    const ref = REFERENCES[key];
+    return ref && ref.length ? ref.length : NaN;
+  }
+
+  function updateCalibrationPreview() {
+    const len = getRefLength();
+    const px = parseInt(calibrationRange.value) || 200;
+    refLengthDisplay.textContent = isFinite(len) ? len.toFixed(2) + " cm" : "—";
+    calibrationRuler.style.width = px + "px";
+    pixelDisplay.value = px + " px";
+    btnSaveCal.disabled = !isFinite(len);
+
+    const key = refSelect.value;
+    const ref = REFERENCES[key];
+    calHint.textContent = ref ? ref.hint : "";
+    customLengthRow.style.display = key === "custom" ? "block" : "none";
+  }
+
+  function openCalibration() {
+    const saved = loadCalibration();
+    if (saved) {
+      const defaultPx = Math.round(10 * saved.pixelsPerCm);
+      calibrationRange.value = Math.min(1600, Math.max(20, defaultPx));
+    }
+    updateCalibrationPreview();
+    calibrationOverlay.classList.remove("hidden");
+  }
+
+  function closeCalibration() {
+    calibrationOverlay.classList.add("hidden");
+  }
+
+  function doCalibrate() {
+    const refLen = getRefLength();
+    const rulerPx = parseInt(calibrationRange.value) || 200;
+    if (!isFinite(refLen) || refLen <= 0 || rulerPx <= 0) return;
+
+    pixelsPerCm = rulerPx / refLen;
+    saveCalibration(pixelsPerCm);
+    syncLength(rulerLengthCm);
+    /* no clamping - allow off-screen */
+    closeCalibration();
+  }
+
+  function resetRuler() {
+    clearCalibration();
+    rulerPos = { x: 100, y: 100 };
+    rulerContainer.style.left = "100px";
+    rulerContainer.style.top = "100px";
+    syncAngle(0);
+    syncLength(15);
+  }
+
+  rulerBody.addEventListener("mousedown", (e) => {
+    if (e.target === rulerHandle || rulerHandle.contains(e.target)) return;
+    startDrag(e, "move");
+  });
+  rulerBody.addEventListener("touchstart", (e) => {
+    if (e.target === rulerHandle || rulerHandle.contains(e.target)) return;
+    startDrag(e, "move");
+  }, { passive: false });
+
+  rulerHandle.addEventListener("mousedown", (e) => { e.stopPropagation(); startDrag(e, "resize"); });
+  rulerHandle.addEventListener("touchstart", (e) => { e.stopPropagation(); startDrag(e, "resize"); }, { passive: false });
+
+  lengthRange.addEventListener("input", () => syncLength(parseFloat(lengthRange.value)));
+  lengthNumber.addEventListener("input", () => syncLength(parseFloat(lengthNumber.value)));
+
+  btnHorizontal.addEventListener("click", () => syncAngle(0));
+  btnVertical.addEventListener("click", () => syncAngle(90));
+  btnAng0.addEventListener("click", () => syncAngle(0));
+  btnAng45.addEventListener("click", () => syncAngle(45));
+  btnAng90.addEventListener("click", () => syncAngle(90));
+  angleRange.addEventListener("input", () => syncAngle(parseFloat(angleRange.value)));
+  btnCalibrate.addEventListener("click", openCalibration);
+  btnReset.addEventListener("click", resetRuler);
+  btnSaveCal.addEventListener("click", doCalibrate);
+  btnCancelCal.addEventListener("click", closeCalibration);
+
+  refSelect.addEventListener("change", updateCalibrationPreview);
+  calibrationRange.addEventListener("input", updateCalibrationPreview);
+  customLengthInput.addEventListener("input", updateCalibrationPreview);
+
+  calibrationOverlay.addEventListener("click", (e) => {
+    if (e.target === calibrationOverlay) closeCalibration();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !calibrationOverlay.classList.contains("hidden")) {
+      closeCalibration();
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    /* no clamping - allow off-screen */
+  });
+
+  const saved = loadCalibration();
+  if (saved) {
+    pixelsPerCm = saved.pixelsPerCm;
+    syncAngle(0);
+    syncLength(rulerLengthCm);
+  } else {
+    updateRulerSize();
+  }
+  rulerContainer.style.left = rulerPos.x + "px";
+  rulerContainer.style.top = rulerPos.y + "px";
+  /* no clamping - allow off-screen */
+})();
+</script>
+</body>
+</html>
