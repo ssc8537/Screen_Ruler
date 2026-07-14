@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>屏幕测量工具 - 直尺 & 矩形测量</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- 工具栏 -->
+    <div id="toolbar">
+        <button id="btn-ruler" class="active" title="直尺模式 (R键)">
+            📏 直尺
+        </button>
+        <button id="btn-rect" class="accent2" title="矩形测量模式 (M键)">
+            ⬜ 矩形框
+        </button>
+        <button id="btn-reset-ruler" title="重置当前位置 (0键)">
+            🔄 重置
+        </button>
+        <button id="btn-calibrate" title="重新校准 (C键)">
+            ⚙️ 校准
+        </button>
+        <button id="btn-measure-screen" title="一键测量整个屏幕">
+            📐 测量屏幕
+        </button>
+        <button id="btn-measure-diagonal" title="一键测量屏幕对角线">
+            📏 测量对角线
+        </button>
+        <button id="btn-help" title="使用帮助 (H键)">
+            ❓
+        </button>
+    </div>
+
+    <!-- 测量信息浮层 -->
+    <div id="info-display"></div>
+
+    <!-- 校准覆盖层 -->
+    <div id="calibration-overlay">
+        <div id="calibration-panel">
+            <h2>📐 屏幕校准</h2>
+            <p class="subtitle">为了让测量结果准确，请先完成校准。<br>校准后请<b>不要改变浏览器缩放</b>，否则需重新校准。</p>
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="tab-card">💳 银行卡</button>
+                <button class="tab-btn" data-tab="tab-id">🆔 身份证</button>
+                <button class="tab-btn" data-tab="tab-a4">📄 A4纸</button>
+                <button class="tab-btn" data-tab="tab-coin">🪙 硬币</button>
+                <button class="tab-btn" data-tab="tab-manual">📏 手动测量</button>
+                <button class="tab-btn" data-tab="tab-direct">📐 直接输入</button>
+            </div>
+            <!-- 银行卡校准 -->
+            <div class="tab-content active" id="tab-card">
+                <p style="font-size:13px;color:#ccc;margin-bottom:8px;">请将一张<b>标准银行卡/信用卡</b>放在屏幕上，<br>调整滑块使矩形框与银行卡<b>宽度完全重合</b>（银行卡宽度 = <b>8.56 cm</b>）</p>
+                <div class="ref-rect" id="card-ref-rect" style="width:280px;height:176px;">
+                    <span class="ref-rect-label">银行卡宽度 8.56cm</span>
+                </div>
+                <br>
+                <input type="range" id="card-slider" min="100" max="800" value="280" step="1">
+                <p style="font-size:12px;color:#aaa;">拖动滑块 → 当前像素宽度: <b id="card-px-val">280</b> px</p>
+                <div class="btn-row">
+                    <button class="btn" id="btn-card-confirm">✅ 确认重合，完成校准</button>
+                </div>
+            </div>
+            <!-- 身份证校准 -->
+            <div class="tab-content" id="tab-id">
+                <p style="font-size:13px;color:#ccc;margin-bottom:8px;">请将一张<b>中国第二代身份证</b>放在屏幕上，<br>调整滑块使矩形框与身份证<b>宽度完全重合</b>（身份证宽度 = <b>8.56 cm</b>）</p>
+                <div class="ref-rect" id="id-ref-rect" style="width:280px;height:176px;">
+                    <span class="ref-rect-label">身份证宽度 8.56cm</span>
+                </div>
+                <br>
+                <input type="range" id="id-slider" min="100" max="800" value="280" step="1">
+                <p style="font-size:12px;color:#aaa;">拖动滑块 → 当前像素宽度: <b id="id-px-val">280</b> px</p>
+                <div class="btn-row">
+                    <button class="btn" id="btn-id-confirm">✅ 确认重合，完成校准</button>
+                </div>
+            </div>
+            <!-- A4纸校准 -->
+            <div class="tab-content" id="tab-a4">
+                <p style="font-size:13px;color:#ccc;margin-bottom:8px;">请将一张<b>标准A4纸</b>放在屏幕上，<br>调整滑块使矩形框与A4纸<b>宽度完全重合</b>（A4纸宽度 = <b>21 cm</b>）</p>
+                <div class="ref-rect" id="a4-ref-rect" style="width:300px;height:210px;">
+                    <span class="ref-rect-label">A4纸宽度 21cm</span>
+                </div>
+                <br>
+                <input type="range" id="a4-slider" min="150" max="600" value="300" step="1">
+                <p style="font-size:12px;color:#aaa;">拖动滑块 → 当前像素宽度: <b id="a4-px-val">300</b> px</p>
+                <div class="btn-row">
+                    <button class="btn" id="btn-a4-confirm">✅ 确认重合，完成校准</button>
+                </div>
+            </div>
+            <!-- 硬币校准 -->
+            <div class="tab-content" id="tab-coin">
+                <p style="font-size:13px;color:#ccc;margin-bottom:8px;">请将一枚<b>1元硬币</b>放在屏幕上，<br>调整滑块使硬币刚好放入<b>内圈</b>中（1元硬币直径 = <b>2.5 cm</b>）</p>
+                <div style="margin:15px auto;display:inline-block;position:relative;">
+                    <!-- 外圈（虚线） -->
+                    <div id="coin-outer-circle" style="width:100px;height:100px;border:3px dashed #f72585;border-radius:50%;display:flex;align-items:center;justify-content:center;position:relative;">
+                        <!-- 内圈（实心圆，用户放硬币的区域） -->
+                        <div id="coin-inner-circle" style="width:70px;height:70px;background:rgba(76,201,240,0.2);border:2px solid #4cc9f0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;color:rgba(255,255,255,0.9);">
+                            内圈<br>2.5cm
+                        </div>
+                    </div>
+                </div>
+                <br>
+                <input type="range" id="coin-slider" min="30" max="150" value="70" step="1">
+                <p style="font-size:12px;color:#aaa;">拖动滑块 → 内圈像素直径: <b id="coin-px-val">70</b> px</p>
+                <div class="btn-row">
+                    <button class="btn" id="btn-coin-confirm">✅ 确认，完成校准</button>
+                </div>
+            </div>
+            <!-- 手动测量 -->
+            <div class="tab-content" id="tab-manual">
+                <p style="font-size:13px;color:#ccc;margin-bottom:8px;">请用<b>真实尺子</b>测量下面这条线的长度（cm），然后输入：</p>
+                <div class="measurement-line" id="manual-line" style="width:400px;"></div>
+                <p style="font-size:12px;color:#aaa;">这条线的像素长度: <b>400 px</b></p>
+                <label style="font-size:13px;color:#ccc;">真实尺子测得的长度: 
+                    <input type="number" id="manual-cm-input" value="10.6" step="0.01" min="1" max="100" style="width:90px;"> cm
+                </label>
+                <div class="btn-row">
+                    <button class="btn" id="btn-manual-confirm">✅ 确认，完成校准</button>
+                </div>
+            </div>
+            <!-- 直接输入 -->
+            <div class="tab-content" id="tab-direct">
+                <p style="font-size:13px;color:#ccc;margin-bottom:8px;">如果您知道屏幕的实际物理参数，可直接输入：</p>
+                <label style="font-size:13px;color:#ccc;display:block;margin:6px 0;">
+                    屏幕物理宽度: <input type="number" id="direct-width-cm" value="53" step="0.1" min="5" max="200" style="width:80px;"> cm
+                </label>
+                <label style="font-size:13px;color:#ccc;display:block;margin:6px 0;">
+                    屏幕水平分辨率: <input type="number" id="direct-res-x" value="1920" step="1" min="100" max="10000" style="width:90px;"> px
+                </label>
+                <p style="font-size:11px;color:#888;">（将自动计算：像素/cm = 分辨率 / 物理宽度）</p>
+                <div class="btn-row">
+                    <button class="btn" id="btn-direct-confirm">✅ 确认，完成校准</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 帮助覆盖层 -->
+    <div id="help-overlay" style="position:fixed;inset:0;z-index:99;background:rgba(0,0,0,0.8);display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);">
+        <div style="background:var(--panel-bg);border-radius:20px;padding:24px 28px;max-width:500px;width:90%;color:var(--text);border:1px solid var(--border);text-align:left;line-height:1.7;font-size:14px;">
+            <h3 style="text-align:center;color:#fff;margin-bottom:12px;">📖 使用帮助</h3>
+            <p style="background:rgba(76,201,240,0.15);padding:10px;border-radius:8px;border:1px solid rgba(76,201,240,0.3);">
+                <b>💡 重要提示：</b><br>
+                - 推荐使用 <b>Edge 浏览器</b><br>
+                - 按 <b>F11</b> 键全屏浏览器，这样就可以测量整个屏幕了！
+            </p>
+            <p><b>📏 直尺模式：</b></p>
+            <ul style="padding-left:20px;">
+                <li><b>拖拽红色起点</b> → 移动直尺位置</li>
+                <li><b>拖拽蓝色终点</b> → 改变长度和角度</li>
+                <li><b>拖拽尺身</b> → 整体移动直尺</li>
+                <li><b>按住Shift</b> → 角度吸附（0°/45°/90°等）</li>
+                <li>直尺自动显示刻度（cm）</li>
+                <li><b>起点/终点可拖到屏幕外</b>，方便测对角线</li>
+                <li>直尺默认更长，便于测量大屏幕</li>
+            </ul>
+            <p style="margin-top:8px;"><b>⬜ 矩形框模式：</b></p>
+            <ul style="padding-left:20px;">
+                <li><b>拖拽四角手柄</b> → 调整矩形大小</li>
+                <li><b>拖拽边框</b> → 移动矩形位置</li>
+                <li>自动显示<b>宽、高、对角线</b>长度</li>
+            </ul>
+            <p style="margin-top:8px;"><b>📐 快速测量：</b></p>
+            <ul style="padding-left:20px;">
+                <li>点击「📐 测量屏幕」按钮 → 一键测量整个屏幕尺寸</li>
+                <li>点击「📏 测量对角线」按钮 → 一键测量屏幕对角线</li>
+                <li>同时显示宽、高和对角线长度</li>
+            </ul>
+            <p style="margin-top:8px;font-size:12px;color:#aaa;">快捷键: <b>R</b>=直尺 <b>M</b>=矩形框 <b>C</b>=校准 <b>0</b>=重置 <b>Shift</b>=角度吸附 <b>H</b>=帮助 <b>Esc</b>=关闭帮助</p>
+            <div style="text-align:center;margin-top:14px;">
+                <button class="btn secondary" onclick="document.getElementById('help-overlay').style.display='none'" style="background:var(--accent);color:#000;border:none;padding:10px 20px;border-radius:20px;cursor:pointer;font-weight:700;font-family:inherit;">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="main-canvas"></canvas>
+
+    <script src="app.js"></script>
+</body>
+</html>
